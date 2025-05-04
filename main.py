@@ -6,6 +6,8 @@ from PyPDF2 import PdfReader, PdfWriter
 import tempfile
 import re
 import sys
+import threading
+import time
 
 class PDFSplitterApp:
     def __init__(self, root):
@@ -27,15 +29,18 @@ class PDFSplitterApp:
         # 実行ボタン状態管理用変数
         self.execute_button_enabled = tk.BooleanVar(value=False)
         
+        # 処理状態表示用
+        self.processing_status = tk.StringVar(value="準備完了")
+        
         self._create_widgets()
     
     def _create_widgets(self):
         # メインフレーム
-        main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.main_frame = ctk.CTkFrame(self.root)
+        self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         # ファイル選択セクション
-        file_frame = ctk.CTkFrame(main_frame)
+        file_frame = ctk.CTkFrame(self.main_frame)
         file_frame.pack(fill="x", padx=10, pady=10)
         
         ctk.CTkLabel(file_frame, text="PDFファイル:").pack(side="left", padx=5)
@@ -46,7 +51,7 @@ class PDFSplitterApp:
         ctk.CTkButton(file_frame, text="参照...", command=self._browse_pdf).pack(side="right", padx=5)
         
         # 出力先選択セクション
-        output_frame = ctk.CTkFrame(main_frame)
+        output_frame = ctk.CTkFrame(self.main_frame)
         output_frame.pack(fill="x", padx=10, pady=10)
         
         ctk.CTkLabel(output_frame, text="出力先:").pack(side="left", padx=5)
@@ -57,7 +62,7 @@ class PDFSplitterApp:
         ctk.CTkButton(output_frame, text="参照...", command=self._browse_output_dir).pack(side="right", padx=5)
         
         # サイズ制限セクション
-        size_frame = ctk.CTkFrame(main_frame)
+        size_frame = ctk.CTkFrame(self.main_frame)
         size_frame.pack(fill="x", padx=10, pady=10)
         
         ctk.CTkLabel(size_frame, text="ファイルサイズ制限:").pack(anchor="w", padx=5, pady=5)
@@ -92,8 +97,7 @@ class PDFSplitterApp:
         )
         self.value_entry.insert(0, str(self.size_value.get()))
         self.value_entry.pack(side="left", padx=5)
-        self.value_entry.bind("<FocusOut>", self._validate_entry)
-        self.value_entry.bind("<Return>", self._validate_entry)
+        # キーボード入力の確定は行わない（実行ボタン押下時に反映）
         
         # 数値を増やすボタン
         ctk.CTkButton(
@@ -102,6 +106,14 @@ class PDFSplitterApp:
             width=30, 
             command=self._increase_value
         ).pack(side="left", padx=5)
+        
+        # PDF情報更新ボタン
+        ctk.CTkButton(
+            value_options_frame,
+            text="更新",
+            width=60,
+            command=self._validate_and_update_info
+        ).pack(side="left", padx=10)
         
         # 単位選択ダイアル
         unit_frame = ctk.CTkFrame(dial_frame)
@@ -120,7 +132,7 @@ class PDFSplitterApp:
         unit_menu.set(self.size_unit.get())
         
         # 情報表示エリア
-        info_frame = ctk.CTkFrame(main_frame)
+        info_frame = ctk.CTkFrame(self.main_frame)
         info_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         ctk.CTkLabel(info_frame, text="PDFファイル情報:").pack(anchor="w", padx=5, pady=5)
@@ -129,21 +141,24 @@ class PDFSplitterApp:
         self.info_label.pack(fill="both", expand=True, padx=5, pady=5)
         
         # 実行ボタン
-        button_frame = ctk.CTkFrame(main_frame)
+        button_frame = ctk.CTkFrame(self.main_frame)
         button_frame.pack(fill="x", padx=10, pady=10)
         
         # 実行ボタンを初期状態では無効にする
         self.execute_button = ctk.CTkButton(
             button_frame, 
             text="実行", 
-            command=self._process_pdf, 
+            command=self._execute_processing, 
             fg_color="#28a745", 
             hover_color="#218838",
             state="disabled"  # 初期状態では無効
         )
         self.execute_button.pack(padx=5, pady=5, fill="x")
-    
-    def _validate_entry(self, event=None):
+        
+        # 処理状況表示用フレーム（初期状態では非表示）
+        self.processing_frame = ctk.CTkFrame(self.root)
+        
+    def _validate_entry(self):
         """入力された値を検証して適切な形式に変換する"""
         entry_text = self.value_entry.get()
         
@@ -157,8 +172,7 @@ class PDFSplitterApp:
         # 空の場合またはすべて数字以外だった場合はエラー
         if not entry_text:
             messagebox.showerror("エラー", "有効な数値が入力されていません。\n数字を含む値を入力してください。")
-            self.root.after(100, lambda: sys.exit(1))  # 少し遅延させてからプログラム終了
-            return
+            return False
         
         # 値を整数に変換
         try:
@@ -178,19 +192,25 @@ class PDFSplitterApp:
             self.size_value.set(value)
             self.value_entry.delete(0, tk.END)
             self.value_entry.insert(0, str(value))
-            self._update_size_info()
             
-            # ボタン状態の更新
-            self._update_execute_button_state()
+            return True
             
         except ValueError:
-            # 変換エラーの場合はエラーメッセージを表示して終了
+            # 変換エラーの場合はエラーメッセージを表示
             messagebox.showerror("エラー", "数値の変換に失敗しました。\n有効な数字を入力してください。")
-            self.root.after(100, lambda: sys.exit(1))
+            return False
+    
+    def _validate_and_update_info(self):
+        """入力値を検証してPDF情報を更新する"""
+        if self._validate_entry():
+            self._update_pdf_info()
+            self._update_execute_button_state()
     
     def _increase_value(self):
         """サイズ値を増加させる (常に1単位で増加)"""
-        self._validate_entry()  # 現在の入力を検証
+        if not self._validate_entry():
+            return
+            
         current = self.size_value.get()
         
         if self.size_unit.get() == "KB":
@@ -206,14 +226,16 @@ class PDFSplitterApp:
             self.size_value.set(new_value)
             self.value_entry.delete(0, tk.END)
             self.value_entry.insert(0, str(new_value))
-            self._update_size_info()
+            self._update_pdf_info()
             
             # ボタン状態の更新
             self._update_execute_button_state()
     
     def _decrease_value(self):
         """サイズ値を減少させる (常に1単位で減少)"""
-        self._validate_entry()  # 現在の入力を検証
+        if not self._validate_entry():
+            return
+            
         current = self.size_value.get()
         
         if current > 1:
@@ -222,14 +244,15 @@ class PDFSplitterApp:
             self.size_value.set(new_value)
             self.value_entry.delete(0, tk.END)
             self.value_entry.insert(0, str(new_value))
-            self._update_size_info()
+            self._update_pdf_info()
             
             # ボタン状態の更新
             self._update_execute_button_state()
     
     def _update_size_info(self, *args):
-        """サイズ情報を更新"""
+        """サイズ情報を更新（単位変更時のみ）"""
         if self.pdf_path:
+            self._validate_entry()  # 現在の値を検証
             self._update_pdf_info()
             
             # ボタン状態の更新
@@ -304,35 +327,95 @@ class PDFSplitterApp:
         except Exception as e:
             self.pdf_info.set(f"エラー: PDFファイルの読み込みに失敗しました。\n{str(e)}")
     
+    def _show_processing_screen(self):
+        """処理中画面を表示"""
+        # 既存のフレームを削除
+        self.main_frame.pack_forget()
+        
+        # 処理状況表示フレームを作成
+        self.processing_frame = ctk.CTkFrame(self.root)
+        self.processing_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # タイトル
+        ctk.CTkLabel(
+            self.processing_frame, 
+            text="PDF分割処理中...", 
+            font=("Helvetica", 20, "bold")
+        ).pack(pady=(20, 30))
+        
+        # ファイル情報
+        file_info = f"ファイル: {os.path.basename(self.pdf_path)}\n"
+        file_info += f"サイズ制限: {self.size_value.get()} {self.size_unit.get()}"
+        ctk.CTkLabel(
+            self.processing_frame,
+            text=file_info,
+            justify="left",
+            wraplength=550
+        ).pack(pady=10, fill="x")
+        
+        # 進行状況表示
+        status_frame = ctk.CTkFrame(self.processing_frame)
+        status_frame.pack(fill="x", padx=20, pady=20, expand=True)
+        
+        ctk.CTkLabel(
+            status_frame,
+            textvariable=self.processing_status,
+            font=("Helvetica", 14),
+            wraplength=550,
+            justify="center"
+        ).pack(pady=30)
+    
+    def _execute_processing(self):
+        """実行ボタンが押されたときの処理"""
+        # 入力された値を検証
+        if not self._validate_entry():
+            return
+        
+        # 処理画面に切り替え
+        self._show_processing_screen()
+        
+        # 処理を別スレッドで実行
+        threading.Thread(target=self._process_pdf, daemon=True).start()
+    
     def _process_pdf(self):
         if not self.pdf_path:
             messagebox.showerror("エラー", "PDFファイルを選択してください。")
             return
         
         try:
+            self.processing_status.set("PDFファイルのサイズを確認中...")
+            
             pdf_size_bytes = os.path.getsize(self.pdf_path)
             size_limit_bytes = self._get_size_limit_in_bytes()
             
             # サイズ制限を超えていない場合は処理しない
             if pdf_size_bytes <= size_limit_bytes:
+                self.processing_status.set("PDFファイルは既にサイズ制限以内です。分割の必要はありません。")
                 messagebox.showinfo(
                     "情報", 
                     f"PDFファイルは既にサイズ制限（{self.size_value.get()} {self.size_unit.get()}）以内です。分割の必要はありません。"
                 )
+                # プログラム終了
+                self.root.after(100, self.root.destroy)
                 return
             
             # 出力先の決定
             output_directory = self.output_dir if self.output_dir else os.path.dirname(self.pdf_path)
             base_name = os.path.splitext(os.path.basename(self.pdf_path))[0]
             
+            self.processing_status.set("PDFファイルを読み込み中...")
             reader = PdfReader(self.pdf_path)
             total_pages = len(reader.pages)
             
             # バイナリサーチを使って最適な分割点を見つける
+            self.processing_status.set("最適な分割点を計算中...")
             result = self._find_optimal_splits(reader, total_pages, size_limit_bytes)
             
             if not result:
+                self.processing_status.set("エラー: PDFの分割に失敗しました。")
                 messagebox.showerror("エラー", "PDFの分割に失敗しました。")
+                # プログラム終了
+                self.root.after(100, self.root.destroy)
                 return
             
             # 分割実行
@@ -340,6 +423,8 @@ class PDFSplitterApp:
             num_parts = len(split_points) - 1  # 分割点の数から実際の分割数を計算
             
             for i in range(num_parts):
+                self.processing_status.set(f"分割ファイル {i+1}/{num_parts} を作成中...")
+                
                 start_page = split_points[i]
                 end_page = split_points[i+1] if i+1 < len(split_points) else total_pages
                 
@@ -350,11 +435,30 @@ class PDFSplitterApp:
                 output_file = os.path.join(output_directory, f"{base_name}_part{i+1}.pdf")
                 with open(output_file, "wb") as f:
                     writer.write(f)
+                
+                # 進捗を表示（スレッドセーフ）
+                self.root.after(0, lambda i=i, num_parts=num_parts: 
+                    self.processing_status.set(f"分割ファイル {i+1}/{num_parts} を作成しました"))
+                
+                # 少し待機して次の処理へ
+                time.sleep(0.5)
             
-            messagebox.showinfo("成功", f"PDFファイルを{num_parts}つに分割しました。\n保存先: {output_directory}")
+            self.processing_status.set(f"完了: PDFファイルを{num_parts}つに分割しました")
+            
+            # 完了メッセージを表示（スレッドセーフ）
+            self.root.after(0, lambda: messagebox.showinfo("成功", 
+                f"PDFファイルを{num_parts}つに分割しました。\n保存先: {output_directory}"))
+            
+            # プログラム終了（スレッドセーフ）
+            self.root.after(100, self.root.destroy)
             
         except Exception as e:
-            messagebox.showerror("エラー", f"処理中にエラーが発生しました。\n{str(e)}")
+            error_msg = f"処理中にエラーが発生しました。\n{str(e)}"
+            self.processing_status.set(f"エラー: {error_msg}")
+            # エラーメッセージを表示（スレッドセーフ）
+            self.root.after(0, lambda: messagebox.showerror("エラー", error_msg))
+            # プログラム終了（スレッドセーフ）
+            self.root.after(100, self.root.destroy)
     
     def _find_optimal_splits(self, reader, total_pages, size_limit_bytes):
         """バイナリサーチを使って最適な分割点を見つける"""
@@ -362,6 +466,10 @@ class PDFSplitterApp:
         current_start = 0
         
         while current_start < total_pages:
+            # 進捗状況の更新
+            progress_msg = f"分割点を計算中... ({current_start}/{total_pages} ページ)"
+            self.root.after(0, lambda msg=progress_msg: self.processing_status.set(msg))
+            
             # バイナリサーチで次の分割点を探す
             low = current_start + 1
             high = total_pages
