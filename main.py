@@ -24,6 +24,9 @@ class PDFSplitterApp:
         
         self.pdf_info = tk.StringVar(value="PDFファイルを選択してください")
         
+        # 実行ボタン状態管理用変数
+        self.execute_button_enabled = tk.BooleanVar(value=False)
+        
         self._create_widgets()
     
     def _create_widgets(self):
@@ -129,7 +132,16 @@ class PDFSplitterApp:
         button_frame = ctk.CTkFrame(main_frame)
         button_frame.pack(fill="x", padx=10, pady=10)
         
-        ctk.CTkButton(button_frame, text="実行", command=self._process_pdf, fg_color="#28a745", hover_color="#218838").pack(padx=5, pady=5, fill="x")
+        # 実行ボタンを初期状態では無効にする
+        self.execute_button = ctk.CTkButton(
+            button_frame, 
+            text="実行", 
+            command=self._process_pdf, 
+            fg_color="#28a745", 
+            hover_color="#218838",
+            state="disabled"  # 初期状態では無効
+        )
+        self.execute_button.pack(padx=5, pady=5, fill="x")
     
     def _validate_entry(self, event=None):
         """入力された値を検証して適切な形式に変換する"""
@@ -168,6 +180,9 @@ class PDFSplitterApp:
             self.value_entry.insert(0, str(value))
             self._update_size_info()
             
+            # ボタン状態の更新
+            self._update_execute_button_state()
+            
         except ValueError:
             # 変換エラーの場合はエラーメッセージを表示して終了
             messagebox.showerror("エラー", "数値の変換に失敗しました。\n有効な数字を入力してください。")
@@ -192,6 +207,9 @@ class PDFSplitterApp:
             self.value_entry.delete(0, tk.END)
             self.value_entry.insert(0, str(new_value))
             self._update_size_info()
+            
+            # ボタン状態の更新
+            self._update_execute_button_state()
     
     def _decrease_value(self):
         """サイズ値を減少させる (常に1単位で減少)"""
@@ -205,11 +223,17 @@ class PDFSplitterApp:
             self.value_entry.delete(0, tk.END)
             self.value_entry.insert(0, str(new_value))
             self._update_size_info()
+            
+            # ボタン状態の更新
+            self._update_execute_button_state()
     
     def _update_size_info(self, *args):
         """サイズ情報を更新"""
         if self.pdf_path:
             self._update_pdf_info()
+            
+            # ボタン状態の更新
+            self._update_execute_button_state()
     
     def _browse_pdf(self):
         file_path = filedialog.askopenfilename(
@@ -221,6 +245,9 @@ class PDFSplitterApp:
             self.pdf_path = file_path
             self.file_path_label.configure(text=os.path.basename(file_path))
             self._update_pdf_info()
+            
+            # ボタン状態の更新
+            self._update_execute_button_state()
     
     def _browse_output_dir(self):
         dir_path = filedialog.askdirectory(title="出力先フォルダを選択")
@@ -228,6 +255,14 @@ class PDFSplitterApp:
         if dir_path:
             self.output_dir = dir_path
             self.output_path_label.configure(text=dir_path)
+    
+    def _update_execute_button_state(self):
+        """実行ボタンの状態を更新"""
+        # ファイルが選択されていて、サイズ制限値が有効であれば実行ボタンを有効化
+        if self.pdf_path and self.size_value.get() > 0:
+            self.execute_button.configure(state="normal")
+        else:
+            self.execute_button.configure(state="disabled")
     
     def _get_size_limit_in_bytes(self):
         """現在の設定から制限サイズをバイト単位で取得"""
