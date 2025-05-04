@@ -391,12 +391,12 @@ class PDFSplitterApp:
             # サイズ制限を超えていない場合は処理しない
             if pdf_size_bytes <= size_limit_bytes:
                 self.processing_status.set("PDFファイルは既にサイズ制限以内です。分割の必要はありません。")
-                messagebox.showinfo(
+                self.root.after_idle(lambda: messagebox.showinfo(
                     "情報", 
                     f"PDFファイルは既にサイズ制限（{self.size_value.get()} {self.size_unit.get()}）以内です。分割の必要はありません。"
-                )
+                ))
                 # プログラム終了
-                self.root.after(100, self.root.destroy)
+                self.root.after(1000, self.root.destroy)
                 return
             
             # 出力先の決定
@@ -413,9 +413,9 @@ class PDFSplitterApp:
             
             if not result:
                 self.processing_status.set("エラー: PDFの分割に失敗しました。")
-                messagebox.showerror("エラー", "PDFの分割に失敗しました。")
+                self.root.after_idle(lambda: messagebox.showerror("エラー", "PDFの分割に失敗しました。"))
                 # プログラム終了
-                self.root.after(100, self.root.destroy)
+                self.root.after(1000, self.root.destroy)
                 return
             
             # 分割実行
@@ -423,7 +423,9 @@ class PDFSplitterApp:
             num_parts = len(split_points) - 1  # 分割点の数から実際の分割数を計算
             
             for i in range(num_parts):
-                self.processing_status.set(f"分割ファイル {i+1}/{num_parts} を作成中...")
+                # UIの更新はメインスレッドで行う
+                status_msg = f"分割ファイル {i+1}/{num_parts} を作成中..."
+                self.root.after_idle(lambda s=status_msg: self.processing_status.set(s))
                 
                 start_page = split_points[i]
                 end_page = split_points[i+1] if i+1 < len(split_points) else total_pages
@@ -437,28 +439,29 @@ class PDFSplitterApp:
                     writer.write(f)
                 
                 # 進捗を表示（スレッドセーフ）
-                self.root.after(0, lambda i=i, num_parts=num_parts: 
-                    self.processing_status.set(f"分割ファイル {i+1}/{num_parts} を作成しました"))
+                complete_msg = f"分割ファイル {i+1}/{num_parts} を作成しました"
+                self.root.after_idle(lambda s=complete_msg: self.processing_status.set(s))
                 
                 # 少し待機して次の処理へ
                 time.sleep(0.5)
             
-            self.processing_status.set(f"完了: PDFファイルを{num_parts}つに分割しました")
+            final_msg = f"完了: PDFファイルを{num_parts}つに分割しました"
+            self.root.after_idle(lambda s=final_msg: self.processing_status.set(s))
             
             # 完了メッセージを表示（スレッドセーフ）
-            self.root.after(0, lambda: messagebox.showinfo("成功", 
+            self.root.after_idle(lambda: messagebox.showinfo("成功", 
                 f"PDFファイルを{num_parts}つに分割しました。\n保存先: {output_directory}"))
             
-            # プログラム終了（スレッドセーフ）
-            self.root.after(100, self.root.destroy)
+            # プログラム終了（スレッドセーフ）- 少し遅延させて他のコールバックが処理される時間を確保
+            self.root.after(1000, self.root.destroy)
             
         except Exception as e:
             error_msg = f"処理中にエラーが発生しました。\n{str(e)}"
-            self.processing_status.set(f"エラー: {error_msg}")
+            self.root.after_idle(lambda s=error_msg: self.processing_status.set(f"エラー: {s}"))
             # エラーメッセージを表示（スレッドセーフ）
-            self.root.after(0, lambda: messagebox.showerror("エラー", error_msg))
+            self.root.after_idle(lambda e=error_msg: messagebox.showerror("エラー", e))
             # プログラム終了（スレッドセーフ）
-            self.root.after(100, self.root.destroy)
+            self.root.after(1000, self.root.destroy)
     
     def _find_optimal_splits(self, reader, total_pages, size_limit_bytes):
         """バイナリサーチを使って最適な分割点を見つける"""
@@ -466,9 +469,10 @@ class PDFSplitterApp:
         current_start = 0
         
         while current_start < total_pages:
-            # 進捗状況の更新
+            # 進捗状況の更新 - lambdaでローカル変数をキャプチャせず、直接文字列を渡す
             progress_msg = f"分割点を計算中... ({current_start}/{total_pages} ページ)"
-            self.root.after(0, lambda msg=progress_msg: self.processing_status.set(msg))
+            # スレッドセーフなGUI更新
+            self.root.after_idle(lambda s=progress_msg: self.processing_status.set(s))
             
             # バイナリサーチで次の分割点を探す
             low = current_start + 1
