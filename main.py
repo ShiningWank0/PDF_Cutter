@@ -13,7 +13,7 @@ class PDFSplitterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PDFサイズ制限対応分割ツール")
-        self.root.geometry("600x450")
+        self.root.geometry("600x600")
         self.root.resizable(True, True)
         
         self.pdf_path = None
