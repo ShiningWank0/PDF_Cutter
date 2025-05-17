@@ -30,6 +30,88 @@
 - 単位に応じた適切な最大値/最小値の範囲チェック
 - 入力が無効な場合はエラーを表示して終了
 
+## インストール方法
+
+### 実行ファイルを使用する方法（推奨）
+
+1. [GitHub Releases](https://github.com/ユーザー名/PDF_Cutter/releases)ページから、お使いのOSに合ったファイルをダウンロードします。
+   - Windows: `pdf-cutter-windows.zip`
+   - macOS: `pdf-cutter-macos.zip`
+   - Linux: `pdf-cutter-linux.zip`
+
+2. ダウンロードしたZIPファイルを解凍します。
+
+3. 解凍したフォルダ内の実行ファイルをダブルクリックして実行します。
+   - Windows: `pdf_cutter.exe`
+   - macOS/Linux: `pdf_cutter`
+
+### 開発者向け: ソースコードから実行する方法
+
+#### 前提条件
+- Python 3.8以上
+- pip（Pythonパッケージマネージャー）
+
+#### セットアップ手順
+
+**Windows:**
+```
+.\setup_dev.bat
+```
+
+**macOS/Linux:**
+```
+chmod +x setup_dev.sh
+./setup_dev.sh
+```
+
+実行:
+```
+python main.py
+```
+
+## ビルド方法
+
+このプロジェクトはNuitkaを使用して、実行ファイルを生成しています。ビルドは通常、GitHub Actionsによって自動的に行われますが、手動でビルドすることも可能です。
+
+### 手動ビルド方法
+
+#### standaloneモード (依存ファイルが展開される)
+
+```bash
+# 必要なパッケージのインストール
+pip install nuitka
+
+# Windowsでビルド
+python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter --disable-console main.py
+
+# macOS/Linuxでビルド
+python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter main.py
+```
+
+#### onefileモード (単一実行ファイル)
+
+```bash
+# 必要なパッケージのインストール
+pip install nuitka
+
+# Windowsでビルド
+python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console main.py
+
+# macOS/Linuxでビルド
+python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter main.py
+```
+
+### onefileとstandaloneの違い
+
+- **standalone**: 複数のファイルが生成され、より高速に起動しますが、ファイル構造を維持する必要があります
+- **onefile**: 単一の実行ファイルが生成され、より配布が簡単ですが、起動時に一時フォルダに解凍されるため起動が遅くなります
+
+### OS別の注意点
+
+- **Windows**: 通常はonefileモードが推奨されます（使いやすさのため）
+- **macOS**: セキュリティ制限により、アプリ初回起動時に「開発元を確認できないアプリ」の警告が表示されることがあります
+- **Linux**: 必要なシステムライブラリがインストールされていることを確認してください
+
 ## 使用方法
 
 1. **PDFファイルを選択**: 「参照...」ボタンでPDFファイルを選択します

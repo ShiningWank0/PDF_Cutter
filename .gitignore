@@ -8,4 +8,28 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+venv/
+ENV/
+
+# Nuitka ビルド関連
+*.pyd
+*.o
+*.obj
+*.dll
+*.exe
+*.bin
+*.app
+*.exe.manifest
+*.build/
+
+# OS固有ファイル
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE関連
+.vscode/
+*.code-workspace
+.idea/

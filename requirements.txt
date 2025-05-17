@@ -1,3 +1,7 @@
 PyPDF2==3.0.1
 customtkinter==5.2.1
 packaging>=21.0
+nuitka>=1.8
+# ビルドに必要なライブラリ（GitHub Actions環境では自動インストールされます）
+setuptools>=42
+wheel

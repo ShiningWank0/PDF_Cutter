@@ -1,11 +1,35 @@
 [project]
-name = "test"
+name = "pdf-cutter"
 version = "0.1.0"
-description = "Add your description here"
+description = "PDFサイズ制限対応分割ツール"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.8"
 dependencies = [
     "customtkinter==5.2.1",
     "packaging>=21.0",
     "pypdf2==3.0.1",
 ]
+
+[build-system]
+requires = ["setuptools>=42", "wheel", "nuitka>=1.8"]
+build-backend = "setuptools.build_meta"
+
+[tool.nuitka]
+# ビルドモードの設定（standalone または onefile）
+# standalone: 複数ファイルに分割（高速起動）
+# onefile: 単一ファイル（配布が容易）
+standalone = true
+# onefile = false  # onefileビルドを行う場合はこれをtrueに変更
+
+follow-imports = true
+include-package-data = ["customtkinter", "pypdf2"]
+enable-plugins = ["tk-inter"]
+# Windows向けオプション
+windows-disable-console = true  # GUIアプリとして実行
+windows-icon-from-ico = "favicon.ico"  # Windowsアイコン
+
+# macOS向けオプション
+# macos-app-icon = "app.icns"  # macOSアイコン (ビルド前に作成が必要)
+
+# Linux向けオプション
+# linux-icon = "app.png"  # Linuxアイコン (ビルド前に作成が必要)

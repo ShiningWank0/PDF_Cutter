@@ -1,0 +1,134 @@
+name: Build PDF Cutter Application
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            output_name: pdf_cutter.exe
+            asset_name: pdf-cutter-windows.exe
+          - os: macos-latest
+            output_name: pdf_cutter
+            asset_name: pdf-cutter-macos
+          - os: ubuntu-latest
+            output_name: pdf_cutter
+            asset_name: pdf-cutter-linux
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install nuitka
+          pip install -r requirements.txt
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libxcb-xinerama0 libxcb-cursor0 imagemagick
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install imagemagick
+          
+      - name: Prepare icons for all platforms
+        run: |
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            # macOS用の.icnsファイル作成
+            mkdir -p app.iconset
+            convert favicon.ico -resize 16x16 app.iconset/icon_16x16.png
+            convert favicon.ico -resize 32x32 app.iconset/icon_16x16@2x.png
+            convert favicon.ico -resize 32x32 app.iconset/icon_32x32.png
+            convert favicon.ico -resize 64x64 app.iconset/icon_32x32@2x.png
+            convert favicon.ico -resize 128x128 app.iconset/icon_128x128.png
+            convert favicon.ico -resize 256x256 app.iconset/icon_128x128@2x.png
+            convert favicon.ico -resize 256x256 app.iconset/icon_256x256.png
+            convert favicon.ico -resize 512x512 app.iconset/icon_256x256@2x.png
+            convert favicon.ico -resize 512x512 app.iconset/icon_512x512.png
+            convert favicon.ico -resize 1024x1024 app.iconset/icon_512x512@2x.png
+            iconutil -c icns app.iconset -o app.icns
+          elif [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            # Linux用のPNGアイコン作成
+            convert favicon.ico -resize 256x256 app.png
+          fi
+
+      - name: Build with Nuitka (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console --windows-icon-from-ico=favicon.ico --output-dir=dist main.py
+
+      - name: Build with Nuitka (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist main.py
+
+      - name: Build with Nuitka (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --linux-icon=app.png --output-dir=dist main.py
+
+      - name: Rename output file (Windows/Linux onefile)
+        if: matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest'
+        run: |
+          mv dist/main.dist/${{ matrix.output_name }} dist/
+
+      - name: Rename output file (macOS standalone)
+        if: matrix.os == 'macos-latest'
+        run: |
+          mv dist/main.bin dist/${{ matrix.output_name }}
+
+      - name: Create ZIP archive (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd dist
+          powershell Compress-Archive -Path pdf_cutter.exe -DestinationPath ../pdf-cutter-windows.zip
+
+      - name: Create ZIP archive (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd dist
+          zip -r ../pdf-cutter-macos.zip *
+
+      - name: Create ZIP archive (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd dist
+          zip -r ../pdf-cutter-linux.zip pdf_cutter
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: pdf-cutter-${{ matrix.os }}
+          path: dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            pdf-cutter-${{ matrix.os == 'windows-latest' && 'windows' || (matrix.os == 'macos-latest' && 'macos' || 'linux') }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
