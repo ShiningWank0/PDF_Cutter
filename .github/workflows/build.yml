@@ -58,26 +58,28 @@ jobs:
         run: |
           brew install imagemagick
           
-      - name: Prepare icons for all platforms
+      - name: Prepare icons (macOS)
+        if: matrix.os == 'macos-latest'
         run: |
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            # macOS用の.icnsファイル作成
-            mkdir -p app.iconset
-            convert favicon.ico -resize 16x16 app.iconset/icon_16x16.png
-            convert favicon.ico -resize 32x32 app.iconset/icon_16x16@2x.png
-            convert favicon.ico -resize 32x32 app.iconset/icon_32x32.png
-            convert favicon.ico -resize 64x64 app.iconset/icon_32x32@2x.png
-            convert favicon.ico -resize 128x128 app.iconset/icon_128x128.png
-            convert favicon.ico -resize 256x256 app.iconset/icon_128x128@2x.png
-            convert favicon.ico -resize 256x256 app.iconset/icon_256x256.png
-            convert favicon.ico -resize 512x512 app.iconset/icon_256x256@2x.png
-            convert favicon.ico -resize 512x512 app.iconset/icon_512x512.png
-            convert favicon.ico -resize 1024x1024 app.iconset/icon_512x512@2x.png
-            iconutil -c icns app.iconset -o app.icns
-          elif [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            # Linux用のPNGアイコン作成
-            convert favicon.ico -resize 256x256 app.png
-          fi
+          # macOS用の.icnsファイル作成
+          mkdir -p app.iconset
+          convert favicon.ico -resize 16x16 app.iconset/icon_16x16.png
+          convert favicon.ico -resize 32x32 app.iconset/icon_16x16@2x.png
+          convert favicon.ico -resize 32x32 app.iconset/icon_32x32.png
+          convert favicon.ico -resize 64x64 app.iconset/icon_32x32@2x.png
+          convert favicon.ico -resize 128x128 app.iconset/icon_128x128.png
+          convert favicon.ico -resize 256x256 app.iconset/icon_128x128@2x.png
+          convert favicon.ico -resize 256x256 app.iconset/icon_256x256.png
+          convert favicon.ico -resize 512x512 app.iconset/icon_256x256@2x.png
+          convert favicon.ico -resize 512x512 app.iconset/icon_512x512.png
+          convert favicon.ico -resize 1024x1024 app.iconset/icon_512x512@2x.png
+          iconutil -c icns app.iconset -o app.icns
+      
+      - name: Prepare icons (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Linux用の.pngファイル作成
+          convert favicon.ico -resize 256x256 app.png
 
       - name: Build with Nuitka (Windows)
         if: matrix.os == 'windows-latest'
@@ -87,7 +89,7 @@ jobs:
       - name: Build with Nuitka (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist --macos-app-name=${{ matrix.output_name }} --remove-output main.py
+          python -m nuitka --macos-create-app-bundle --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist --macos-app-name=${{ matrix.output_name }} --remove-output --disable-ccache main.py
 
       - name: Build with Nuitka (Linux)
         if: matrix.os == 'ubuntu-latest'
