@@ -10,9 +10,8 @@ jobs:
   build:
     name: Build for ${{ matrix.os }}
     permissions:
-      id-token: write
-      pages: write
       contents: write
+      packages: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,12 +21,15 @@ jobs:
           - os: windows-latest
             output_name: pdf_cutter.exe
             asset_name: pdf-cutter-windows.exe
+            asset_zip_name: pdf-cutter-windows.zip
           - os: macos-latest
             output_name: pdf_cutter
             asset_name: pdf-cutter-macos
+            asset_zip_name: pdf-cutter-macos.zip
           - os: ubuntu-latest
             output_name: pdf_cutter
             asset_name: pdf-cutter-linux
+            asset_zip_name: pdf-cutter-linux.zip
 
     steps:
       - name: Checkout code
@@ -80,51 +82,55 @@ jobs:
       - name: Build with Nuitka (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console --windows-icon-from-ico=favicon.ico --output-dir=dist main.py
+          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console --windows-icon-from-ico=favicon.ico --output-dir=dist --output-filename=${{ matrix.output_name }} --remove-output main.py
 
       - name: Build with Nuitka (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist main.py
+          python -m nuitka --standalone --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist --macos-app-name=${{ matrix.output_name }} --remove-output main.py
 
       - name: Build with Nuitka (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --linux-icon=app.png --output-dir=dist main.py
-
-      - name: Rename output file (Windows/Linux onefile)
-        if: matrix.os == 'windows-latest' || matrix.os == 'ubuntu-latest'
-        run: |
-          mv dist/main.dist/${{ matrix.output_name }} dist/
-
-      - name: Rename output file (macOS standalone)
-        if: matrix.os == 'macos-latest'
-        run: |
-          mv dist/main.bin dist/${{ matrix.output_name }}
+          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --linux-icon=app.png --output-dir=dist --output-filename=${{ matrix.output_name }} --remove-output main.py
 
       - name: Create ZIP archive (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd dist
-          powershell Compress-Archive -Path pdf_cutter.exe -DestinationPath ../pdf-cutter-windows.zip
+          powershell Compress-Archive -Path ${{ matrix.output_name }} -DestinationPath ../${{ matrix.asset_zip_name }}
+          cd ..
 
       - name: Create ZIP archive (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           cd dist
-          zip -r ../pdf-cutter-macos.zip *
+          zip -r ../${{ matrix.asset_zip_name }} ${{ matrix.output_name }}.app
+          cd ..
 
       - name: Create ZIP archive (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           cd dist
-          zip -r ../pdf-cutter-linux.zip pdf_cutter
+          zip -r ../${{ matrix.asset_zip_name }} ${{ matrix.output_name }}
+          cd ..
 
-      - name: Upload artifacts
+      - name: Upload build artifacts (ZIP)
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-cutter-${{ matrix.os }}
-          path: dist/
+          name: ${{ matrix.asset_zip_name }}
+          path: ${{ matrix.asset_zip_name }}
 
-      - name: Release GitHub Actions
-        uses: technote-space/release-github-actions@v6
+      - name: Create GitHub release and upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: |
+            # PDF_Cutter ${{ github.ref_name }}
+            
+            ## Changes
+
+          files: ${{ matrix.asset_zip_name }}
