@@ -90,6 +90,11 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           python -m nuitka --macos-create-app-bundle --follow-imports --plugin-enable=tk-inter --macos-app-icon=app.icns --output-dir=dist --macos-app-name=${{ matrix.output_name }} --remove-output --disable-ccache main.py
+      
+      - name: List dist directory (macOS Debug)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo ""
 
       - name: Build with Nuitka (Linux)
         if: matrix.os == 'ubuntu-latest'
