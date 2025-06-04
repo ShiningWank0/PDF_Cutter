@@ -84,7 +84,7 @@ jobs:
       - name: Build with Nuitka (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console --windows-icon-from-ico=favicon.ico --output-dir=dist --output-filename=${{ matrix.output_name }} --remove-output main.py
+          python -m nuitka --onefile --follow-imports --plugin-enable=tk-inter --disable-console --windows-icon-from-ico=favicon.ico --output-dir=dist --output-filename=${{ matrix.output_name }} --remove-output --assume-yes-for-downloads main.py
 
       - name: Build with Nuitka (macOS)
         if: matrix.os == 'macos-latest'
